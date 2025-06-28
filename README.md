@@ -15,12 +15,12 @@ See `requirements.txt` for the list of Python dependencies. Install them using:
 pip install -r requirements.txt
 ```
 
-Set the `OPENAI_API_KEY` environment variable before running the application.
-
 ## Running
 
 ```bash
 python main.py
 ```
 
-The UI will appear with options to choose your language, level and process. After capturing a screenshot, the analysis results are shown in a text box and can be filtered with the slider.
+At startup a login dialog prompts for your OpenAI API key. Enable "Remember API Key" if you want it stored locally for the next run.
+
+The main window then appears with options to choose your language, level and process. After capturing a screenshot, the analysis results are shown in a text box and can be filtered with the slider.

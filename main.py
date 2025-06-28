@@ -8,6 +8,39 @@ import json
 import psutil
 from PIL import ImageGrab
 
+# Configuration file to store the API key when the user chooses to remember it.
+CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".language_helper.json")
+
+
+def load_saved_key() -> str:
+    """Load API key from config file if it exists."""
+    if not os.path.exists(CONFIG_FILE):
+        return ""
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("api_key", "")
+    except Exception:
+        return ""
+
+
+def save_key(key: str) -> None:
+    """Persist API key to config file."""
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"api_key": key}, f)
+    except Exception:
+        pass
+
+
+def clear_saved_key() -> None:
+    """Remove stored API key."""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            os.remove(CONFIG_FILE)
+    except Exception:
+        pass
+
 try:
     import openai
     from PyQt5 import QtWidgets, QtCore
@@ -23,9 +56,42 @@ class WordEntry:
         self.description = description
 
 
-class MainWindow(QtWidgets.QWidget):  # type: ignore
+class LoginDialog(QtWidgets.QDialog):  # type: ignore
+    """Dialog to ask the user for their OpenAI API key."""
+
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("Enter API Key")
+        layout = QtWidgets.QVBoxLayout()
+
+        self.api_edit = QtWidgets.QLineEdit()
+        self.api_edit.setEchoMode(QtWidgets.QLineEdit.Password)
+        layout.addWidget(QtWidgets.QLabel("OpenAI API Key"))
+        layout.addWidget(self.api_edit)
+
+        self.remember_box = QtWidgets.QCheckBox("Remember API Key")
+        layout.addWidget(self.remember_box)
+
+        button = QtWidgets.QPushButton("Continue")
+        button.clicked.connect(self.accept)
+        layout.addWidget(button)
+
+        self.setLayout(layout)
+
+        saved_key = load_saved_key()
+        if saved_key:
+            self.api_edit.setText(saved_key)
+            self.remember_box.setChecked(True)
+
+    @property
+    def api_key(self) -> str:
+        return self.api_edit.text().strip()
+
+
+class MainWindow(QtWidgets.QWidget):  # type: ignore
+    def __init__(self, api_key: str):
+        super().__init__()
+        self.api_key = api_key
         self.setWindowTitle("Screenshot Language Helper")
         self.resize(600, 400)
 
@@ -80,11 +146,10 @@ class MainWindow(QtWidgets.QWidget):  # type: ignore
             "Respond in JSON as a list with fields word, difficulty and description."
         )
 
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            QtWidgets.QMessageBox.warning(self, "Error", "OPENAI_API_KEY not set")
+        if not self.api_key:
+            QtWidgets.QMessageBox.warning(self, "Error", "API key not provided")
             return
-        openai.api_key = api_key
+        openai.api_key = self.api_key
 
         try:
             response = openai.ChatCompletion.create(
@@ -129,7 +194,18 @@ def main():
         print("PyQt5 not installed")
         return
     app = QtWidgets.QApplication(sys.argv)
-    window = MainWindow()
+
+    login = LoginDialog()
+    if login.exec_() != QtWidgets.QDialog.Accepted:
+        return
+
+    key = login.api_key
+    if login.remember_box.isChecked() and key:
+        save_key(key)
+    elif not login.remember_box.isChecked():
+        clear_saved_key()
+
+    window = MainWindow(key)
     window.show()
     sys.exit(app.exec_())
 
