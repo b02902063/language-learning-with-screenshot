@@ -7,6 +7,7 @@ import json
 
 import psutil
 from PIL import ImageGrab
+import pygetwindow as gw
 
 # Configuration file to store the API key when the user chooses to remember it.
 CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".language_helper.json")
@@ -89,6 +90,20 @@ class LoginDialog(QtWidgets.QDialog):  # type: ignore
 
 
 class MainWindow(QtWidgets.QWidget):  # type: ignore
+    def load_language_config(self) -> dict:
+        """Load language definitions from config file."""
+        path = os.path.join(os.path.dirname(__file__), "language_config.json")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"English": ["A1", "A2", "B1", "B2", "C1", "C2"]}
+
+    def update_levels(self, language: str) -> None:
+        levels = self.languages.get(language, [])
+        self.level_combo.clear()
+        self.level_combo.addItems(levels)
+
     def __init__(self, api_key: str):
         super().__init__()
         self.api_key = api_key
@@ -99,17 +114,21 @@ class MainWindow(QtWidgets.QWidget):  # type: ignore
 
         form = QtWidgets.QFormLayout()
         self.language_combo = QtWidgets.QComboBox()
-        self.language_combo.addItems(["English", "Japanese", "French"])  # example
+        self.languages = self.load_language_config()
+        self.language_combo.addItems(self.languages.keys())
+        self.language_combo.currentTextChanged.connect(self.update_levels)
         form.addRow("Target Language", self.language_combo)
 
         self.level_combo = QtWidgets.QComboBox()
-        self.level_combo.addItems(["A1", "A2", "B1", "B2", "C1", "C2"])
         form.addRow("Your Level", self.level_combo)
+        self.update_levels(self.language_combo.currentText())
 
-        self.process_combo = QtWidgets.QComboBox()
-        for p in psutil.process_iter(['pid', 'name']):
-            self.process_combo.addItem(f"{p.info['name']} ({p.info['pid']})", p.info['pid'])
-        form.addRow("Process", self.process_combo)
+        self.window_combo = QtWidgets.QComboBox()
+        for w in gw.getAllWindows():
+            title = w.title.strip()
+            if title:
+                self.window_combo.addItem(title)
+        form.addRow("Window", self.window_combo)
 
         layout.addLayout(form)
 
@@ -136,7 +155,16 @@ class MainWindow(QtWidgets.QWidget):  # type: ignore
             QtWidgets.QMessageBox.warning(self, "Missing deps", "PyQt5 and openai are required")
             return
 
-        img = ImageGrab.grab()
+        title = self.window_combo.currentText()
+        rect = None
+        for w in gw.getWindowsWithTitle(title):
+            if w.title.strip() == title:
+                rect = (w.left, w.top, w.left + w.width, w.top + w.height)
+                break
+        if rect:
+            img = ImageGrab.grab(bbox=rect)
+        else:
+            img = ImageGrab.grab()
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
