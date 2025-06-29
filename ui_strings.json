@@ -1,0 +1,38 @@
+{
+  "en": {
+    "Settings": "Settings",
+    "OpenAI API Key": "OpenAI API Key",
+    "Remember API Key": "Remember API Key",
+    "Interface Language": "Interface Language",
+    "Report Language": "Report Language",
+    "Continue": "Continue",
+    "Screenshot Language Helper": "Screenshot Language Helper",
+    "Target Language": "Target Language",
+    "Your Level": "Your Level",
+    "Window": "Window",
+    "Capture & Analyze": "Capture & Analyze",
+    "Missing deps": "Missing deps",
+    "PyQt5 and openai are required": "PyQt5 and openai are required",
+    "Error": "Error",
+    "API key not provided": "API key not provided",
+    "API error": "API error"
+  },
+  "zh-TW": {
+    "Settings": "設定",
+    "OpenAI API Key": "OpenAI金鑰",
+    "Remember API Key": "記住API金鑰",
+    "Interface Language": "介面語言",
+    "Report Language": "生成語言",
+    "Continue": "繼續",
+    "Screenshot Language Helper": "截圖語言助手",
+    "Target Language": "學習語言",
+    "Your Level": "程度級別",
+    "Window": "視窗",
+    "Capture & Analyze": "擷取並分析",
+    "Missing deps": "缺少套件",
+    "PyQt5 and openai are required": "需要安裝PyQt5及openai",
+    "Error": "錯誤",
+    "API key not provided": "未提供API金鑰",
+    "API error": "API錯誤"
+  }
+}
