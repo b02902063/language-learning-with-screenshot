@@ -1,7 +1,7 @@
 import io
 import base64
 import json
-from typing import Dict, List
+from typing import Dict, List, Callable, Any, Optional
 
 from PIL import ImageGrab
 import pygetwindow as gw
@@ -72,12 +72,24 @@ def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: s
     return json.loads(args)
 
 
-def analyze_image(title: str, target_lang: str, report_lang: str, api_key: str) -> Dict:
-    """Process screenshot through OpenAI with caching."""
+def analyze_image(
+    title: str,
+    target_lang: str,
+    report_lang: str,
+    api_key: str,
+    identify_func: Optional[Callable[[str, Any, str, str], Dict]] = None,
+    fetch_func: Optional[Callable[[List[str], List[str], Any, str, str], Dict]] = None,
+) -> Dict:
+    """Process screenshot through OpenAI with optional custom steps.
+
+    ``identify_func`` and ``fetch_func`` allow callers to inject mock
+    implementations of :func:`_identify_terms` and :func:`_fetch_details`.
+    """
     img_b64 = grab_window_image(title)
     factory = get_prompt_factory(report_lang)
 
-    terms = _identify_terms(img_b64, factory, target_lang, api_key)
+    identify = identify_func or _identify_terms
+    terms = identify(img_b64, factory, target_lang, api_key)
 
     cache = load_cache()
     vocab_cache = cache.get("vocabulary", {})
@@ -96,8 +108,9 @@ def analyze_image(title: str, target_lang: str, report_lang: str, api_key: str) 
                 new_grammar.append(g)
 
     details = {"vocabulary": [], "grammar": []}
+    fetch = fetch_func or _fetch_details
     if new_vocab or new_grammar:
-        details = _fetch_details(new_vocab, new_grammar, factory, target_lang, api_key)
+        details = fetch(new_vocab, new_grammar, factory, target_lang, api_key)
         for item in details.get("vocabulary", []):
             word = item.get("word")
             if word:
