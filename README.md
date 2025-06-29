@@ -3,7 +3,7 @@
 This project provides a small PyQt application that captures a screenshot of a user-selected window and sends it to the OpenAI API for vocabulary and grammar analysis. The API response is filtered on the client according to the learner's language level.  The response structure is enforced using an OpenAI function with a JSON Schema describing vocabulary and grammar items.
 
 ## Features
-- Select target language and your proficiency level.
+- Select target language and your proficiency level. Currently only Japanese is supported as the target language.
 - Choose a window for screenshot capture.
 - Capture and analyze the screenshot with OpenAI.
 - Filter displayed vocabulary by difficulty without requerying the API.
@@ -31,6 +31,6 @@ The main window then appears with options to choose your language, level and win
 
 Enable **Test Mode** on the settings dialog to run the application without contacting the OpenAI service. In this mode the identify and detail steps are mocked so fixed vocabulary and grammar items are returned, letting you try the interface without an API key.
 
-The code is organized into small modules: `config.py` for settings and translation utilities, `prompts.py` for prompt factories, `schema.py` with the JSON Schema, `openai_client.py` for communicating with OpenAI, and `ui.py` for the PyQt user interface.
+The code is organized into small modules: `config.py` for settings and translation utilities, `prompts.py` for prompt factories, `schema/ja/` containing the Japanese JSON Schema, `openai_client.py` for communicating with OpenAI, and `ui.py` for the PyQt user interface.
 
 Language names and their level lists are defined in `language_config.json`. Edit this file to customize supported languages.

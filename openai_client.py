@@ -8,7 +8,7 @@ import pygetwindow as gw
 import openai
 
 from prompts import get_prompt_factory
-from schema import ITEM_SCHEMA, IDENTIFY_RESPONSE_SCHEMA
+from schema import get_schema
 from cache import load_cache, save_cache
 
 
@@ -30,6 +30,7 @@ def grab_window_image(title: str) -> str:
 
 def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Dict:
     """Ask OpenAI to identify vocabulary and grammar in the image."""
+    _, identify_schema = get_schema(target_lang)
     prompt = factory.create_identify_prompt(target_lang)
     openai.api_key = api_key
     response = openai.ChatCompletion.create(
@@ -43,7 +44,7 @@ def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Di
                 ],
             }
         ],
-        functions=[{"name": "identify_terms", "parameters": IDENTIFY_RESPONSE_SCHEMA}],
+        functions=[{"name": "identify_terms", "parameters": identify_schema}],
         function_call={"name": "identify_terms"},
         max_tokens=400,
     )
@@ -53,6 +54,7 @@ def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Di
 
 def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: str, api_key: str) -> Dict:
     """Ask OpenAI for detailed explanations of given terms."""
+    item_schema, _ = get_schema(target_lang)
     prompt = factory.create_prompt(target_lang)
     message = prompt
     if vocab:
@@ -64,7 +66,7 @@ def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: s
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": message}],
-        functions=[{"name": "deliver_report", "parameters": ITEM_SCHEMA}],
+        functions=[{"name": "deliver_report", "parameters": item_schema}],
         function_call={"name": "deliver_report"},
         max_tokens=500,
     )
