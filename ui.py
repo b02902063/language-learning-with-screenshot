@@ -2,7 +2,7 @@ from typing import List
 from PyQt5 import QtWidgets, QtCore
 import pygetwindow as gw
 
-from config import t, UI_STRINGS, current_ui_language
+from config import t, UI_STRINGS, current_ui_language, save_settings
 from openai_client import analyze_image
 from mock_openai_client import mock_identify_terms, mock_fetch_details
 
@@ -61,6 +61,7 @@ class WordEntry:
 class MainWindow(QtWidgets.QWidget):
     def __init__(self, settings: dict):
         super().__init__()
+        self.settings = settings
         self.api_key = settings.get("api_key", "")
         self.report_language = settings.get("report_language", "en")
         self.test_mode = settings.get("test_mode", False)
@@ -78,10 +79,12 @@ class MainWindow(QtWidgets.QWidget):
         self.languages = self.load_language_config()
         self.language_combo.addItems(self.languages.keys())
         self.language_combo.currentTextChanged.connect(self.update_levels)
-        form.addRow(t("Target Language"), self.language_combo)
+        self.label_target_language = QtWidgets.QLabel(t("Target Language"))
+        form.addRow(self.label_target_language, self.language_combo)
 
         self.level_combo = QtWidgets.QComboBox()
-        form.addRow(t("Your Level"), self.level_combo)
+        self.label_level = QtWidgets.QLabel(t("Your Level"))
+        form.addRow(self.label_level, self.level_combo)
         self.update_levels(self.language_combo.currentText())
 
         self.window_combo = QtWidgets.QComboBox()
@@ -89,7 +92,8 @@ class MainWindow(QtWidgets.QWidget):
             title = w.title.strip()
             if title:
                 self.window_combo.addItem(title)
-        form.addRow(t("Window"), self.window_combo)
+        self.label_window = QtWidgets.QLabel(t("Window"))
+        form.addRow(self.label_window, self.window_combo)
 
         layout.addLayout(form)
 
@@ -106,6 +110,10 @@ class MainWindow(QtWidgets.QWidget):
 
         self.result_box = QtWidgets.QTextEdit()
         layout.addWidget(self.result_box)
+
+        self.settings_button = QtWidgets.QPushButton(t("Settings"))
+        self.settings_button.clicked.connect(self.open_settings)
+        layout.addWidget(self.settings_button)
 
         self.setLayout(layout)
         self.words: List[WordEntry] = []
@@ -140,6 +148,28 @@ class MainWindow(QtWidgets.QWidget):
         )
         self.words = self.parse_words(data)
         self.update_display()
+
+    def open_settings(self):
+        dialog = SettingsDialog(self.settings)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            self.settings.update(dialog.get_settings())
+            save_settings(self.settings)
+            self.api_key = self.settings.get("api_key", "")
+            self.report_language = self.settings.get("report_language", "en")
+            self.test_mode = self.settings.get("test_mode", False)
+            global current_ui_language
+            current_ui_language = self.settings.get("ui_language", "en")
+            self.identify_func = mock_identify_terms if self.test_mode else None
+            self.fetch_func = mock_fetch_details if self.test_mode else None
+            self.refresh_ui_texts()
+
+    def refresh_ui_texts(self):
+        self.setWindowTitle(t("Screenshot Language Helper"))
+        self.label_target_language.setText(t("Target Language"))
+        self.label_level.setText(t("Your Level"))
+        self.label_window.setText(t("Window"))
+        self.capture_button.setText(t("Capture & Analyze"))
+        self.settings_button.setText(t("Settings"))
 
     def parse_words(self, data: dict) -> List[WordEntry]:
         result: List[WordEntry] = []
