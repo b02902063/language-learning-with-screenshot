@@ -4,7 +4,7 @@ import pygetwindow as gw
 
 from config import t, UI_STRINGS, current_ui_language
 from openai_client import analyze_image
-from config import load_settings
+from mock_openai_client import mock_identify_terms, mock_fetch_details
 
 class SettingsDialog(QtWidgets.QDialog):
     def __init__(self, settings):
@@ -32,6 +32,10 @@ class SettingsDialog(QtWidgets.QDialog):
         self.report_lang_combo.setCurrentText(settings.get("report_language", "en"))
         form.addRow(t("Report Language"), self.report_lang_combo)
 
+        self.test_mode_box = QtWidgets.QCheckBox(t("Test Mode"))
+        self.test_mode_box.setChecked(settings.get("test_mode", False))
+        form.addRow(self.test_mode_box)
+
         button = QtWidgets.QPushButton(t("Continue"))
         button.clicked.connect(self.accept)
 
@@ -45,6 +49,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "api_key": self.api_edit.text().strip() if self.remember_box.isChecked() else "",
             "ui_language": self.ui_lang_combo.currentText(),
             "report_language": self.report_lang_combo.currentText(),
+            "test_mode": self.test_mode_box.isChecked(),
         }
 
 class WordEntry:
@@ -58,8 +63,11 @@ class MainWindow(QtWidgets.QWidget):
         super().__init__()
         self.api_key = settings.get("api_key", "")
         self.report_language = settings.get("report_language", "en")
+        self.test_mode = settings.get("test_mode", False)
         global current_ui_language
         current_ui_language = settings.get("ui_language", "en")
+        self.identify_func = mock_identify_terms if self.test_mode else None
+        self.fetch_func = mock_fetch_details if self.test_mode else None
         self.setWindowTitle(t("Screenshot Language Helper"))
         self.resize(600, 400)
 
@@ -118,11 +126,18 @@ class MainWindow(QtWidgets.QWidget):
         self.level_combo.addItems(levels)
 
     def capture_and_analyze(self):
-        if not self.api_key:
+        if not self.api_key and not self.test_mode:
             QtWidgets.QMessageBox.warning(self, t("Error"), t("API key not provided"))
             return
         title = self.window_combo.currentText()
-        data = analyze_image(title, self.language_combo.currentText(), self.report_language, self.api_key)
+        data = analyze_image(
+            title,
+            self.language_combo.currentText(),
+            self.report_language,
+            self.api_key,
+            identify_func=self.identify_func,
+            fetch_func=self.fetch_func,
+        )
         self.words = self.parse_words(data)
         self.update_display()
 

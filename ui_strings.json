@@ -15,7 +15,8 @@
     "PyQt5 and openai are required": "PyQt5 and openai are required",
     "Error": "Error",
     "API key not provided": "API key not provided",
-    "API error": "API error"
+    "API error": "API error",
+    "Test Mode": "Test Mode"
   },
   "zh-TW": {
     "Settings": "設定",
@@ -33,6 +34,7 @@
     "PyQt5 and openai are required": "需要安裝PyQt5及openai",
     "Error": "錯誤",
     "API key not provided": "未提供API金鑰",
-    "API error": "API錯誤"
+    "API error": "API錯誤",
+    "Test Mode": "測試模式"
   }
 }
