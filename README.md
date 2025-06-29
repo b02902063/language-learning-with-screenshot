@@ -6,7 +6,7 @@ This project provides a small PyQt application that captures a screenshot of a u
 - Select target language and your proficiency level. Currently only Japanese is supported as the target language.
 - Choose a window for screenshot capture.
 - Capture and analyze the screenshot with OpenAI.
-- Filter displayed vocabulary by difficulty without requerying the API.
+- Filter displayed vocabulary by selecting your level without requerying the API.
 - Settings dialog stores your API key, interface language and the language used for AI generated reports.
 - OpenAI responses contain all level sections (N1–N5) even when empty. Vocabulary items include `word`, `reading`, `definition`, `pos`, `related`, and `examples`, while `conjugation` and `transitivity` may be `null`.
 
@@ -25,7 +25,7 @@ python main.py
 
 At startup a settings dialog lets you configure the OpenAI API key and choose interface and report languages. Enable "Remember API Key" if you want it stored locally for the next run.
 
-The main window then appears with options to choose your language, level and window. After capturing a screenshot, the analysis results are shown in a text box and can be filtered with the slider.
+The main window then appears with options to choose your language, level and window. After capturing a screenshot, the analysis results are shown in a text box and automatically filtered based on the level you select.
 
 ### Test Mode
 
