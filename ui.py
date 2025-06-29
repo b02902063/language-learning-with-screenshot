@@ -1,5 +1,5 @@
 from typing import List
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets
 import pygetwindow as gw
 
 from config import t, UI_STRINGS, current_ui_language, save_settings
@@ -86,6 +86,7 @@ class MainWindow(QtWidgets.QWidget):
         self.label_level = QtWidgets.QLabel(t("Your Level"))
         form.addRow(self.label_level, self.level_combo)
         self.update_levels(self.language_combo.currentText())
+        self.level_combo.currentIndexChanged.connect(self.update_display)
 
         self.window_combo = QtWidgets.QComboBox()
         for w in gw.getAllWindows():
@@ -101,12 +102,6 @@ class MainWindow(QtWidgets.QWidget):
         self.capture_button.clicked.connect(self.capture_and_analyze)
         layout.addWidget(self.capture_button)
 
-        self.filter_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.filter_slider.setMinimum(1)
-        self.filter_slider.setMaximum(6)
-        self.filter_slider.setValue(6)
-        self.filter_slider.valueChanged.connect(self.update_display)
-        layout.addWidget(self.filter_slider)
 
         self.result_box = QtWidgets.QTextEdit()
         layout.addWidget(self.result_box)
@@ -132,6 +127,7 @@ class MainWindow(QtWidgets.QWidget):
         levels = self.languages.get(language, [])
         self.level_combo.clear()
         self.level_combo.addItems(levels)
+        self.update_display()
 
     def capture_and_analyze(self):
         if not self.api_key and not self.test_mode:
@@ -190,7 +186,7 @@ class MainWindow(QtWidgets.QWidget):
         return result
 
     def update_display(self):
-        level = self.filter_slider.value()
+        level = self.level_combo.currentIndex() + 1
         self.result_box.clear()
         for entry in self.words:
             if entry.difficulty <= level:
