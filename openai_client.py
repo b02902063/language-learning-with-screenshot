@@ -17,11 +17,14 @@ def grab_window_image(title: str) -> str:
     rect = None
     for w in gw.getWindowsWithTitle(title):
         if w.title.strip() == title:
-            rect = (w.left, w.top, w.left + w.width, w.top + w.height)
+            if w.width > 0 and w.height > 0:
+                rect = (w.left, w.top, w.left + w.width, w.top + w.height)
             break
-    if rect:
-        img = ImageGrab.grab(bbox=rect)
-    else:
+    try:
+        img = ImageGrab.grab(bbox=rect) if rect else ImageGrab.grab()
+        if img.width == 0 or img.height == 0:
+            img = ImageGrab.grab()
+    except Exception:
         img = ImageGrab.grab()
     buf = io.BytesIO()
     img.save(buf, format="PNG")
