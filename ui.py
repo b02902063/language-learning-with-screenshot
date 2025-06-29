@@ -1,6 +1,8 @@
 from typing import List
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtCore
 import pygetwindow as gw
+
+from display import DisplayArea, WordEntry
 
 import config
 from config import t, UI_STRINGS, save_settings
@@ -53,11 +55,6 @@ class SettingsDialog(QtWidgets.QDialog):
             "test_mode": self.test_mode_box.isChecked(),
         }
 
-class WordEntry:
-    def __init__(self, word: str, difficulty: int, description: str):
-        self.word = word
-        self.difficulty = difficulty
-        self.description = description
 
 class MainWindow(QtWidgets.QWidget):
     def __init__(self, settings: dict):
@@ -72,8 +69,12 @@ class MainWindow(QtWidgets.QWidget):
         self.setWindowTitle(t("Screenshot Language Helper"))
         self.resize(600, 400)
 
-        layout = QtWidgets.QVBoxLayout()
+        layout = QtWidgets.QHBoxLayout()
 
+        self.display_area = DisplayArea()
+        layout.addWidget(self.display_area, 2)
+
+        right_layout = QtWidgets.QVBoxLayout()
         form = QtWidgets.QFormLayout()
         self.language_combo = QtWidgets.QComboBox()
         self.languages = self.load_language_config()
@@ -96,20 +97,19 @@ class MainWindow(QtWidgets.QWidget):
         self.label_window = QtWidgets.QLabel(t("Window"))
         form.addRow(self.label_window, self.window_combo)
 
-        layout.addLayout(form)
+        right_layout.addLayout(form)
 
         self.capture_button = QtWidgets.QPushButton(t("Capture & Analyze"))
         self.capture_button.clicked.connect(self.capture_and_analyze)
-        layout.addWidget(self.capture_button)
+        right_layout.addWidget(self.capture_button)
 
-
-        self.result_box = QtWidgets.QTextEdit()
-        layout.addWidget(self.result_box)
+        right_layout.addStretch(1)
 
         self.settings_button = QtWidgets.QPushButton(t("Settings"))
         self.settings_button.clicked.connect(self.open_settings)
-        layout.addWidget(self.settings_button)
+        right_layout.addWidget(self.settings_button, alignment=QtCore.Qt.AlignRight)
 
+        layout.addLayout(right_layout, 1)
         self.setLayout(layout)
         self.words: List[WordEntry] = []
 
@@ -177,18 +177,13 @@ class MainWindow(QtWidgets.QWidget):
                 difficulty = len(levels)
             for vocab in info.get("vocabulary", []):
                 word = vocab.get("word", "")
-                desc = vocab.get("definition", "")
-                result.append(WordEntry(word, difficulty, desc))
+                result.append(WordEntry(word, difficulty, vocab))
             for gram in info.get("grammar", []):
                 word = gram.get("grammar_point", "")
-                desc = gram.get("definition", "")
-                result.append(WordEntry(f"Grammar: {word}", difficulty, desc))
+                result.append(WordEntry(word, difficulty, gram, is_grammar=True))
         return result
 
     def update_display(self):
         level = self.level_combo.currentIndex() + 1
-        self.result_box.clear()
-        for entry in self.words:
-            if entry.difficulty <= level:
-                self.result_box.append(f"{entry.word} (level {entry.difficulty}): {entry.description}")
+        self.display_area.set_entries(self.words, level)
 
