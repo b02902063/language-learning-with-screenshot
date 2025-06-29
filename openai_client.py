@@ -1,13 +1,15 @@
 import io
 import base64
 import json
-from typing import Dict
+from typing import Dict, List
+
 from PIL import ImageGrab
 import pygetwindow as gw
 import openai
 
 from prompts import get_prompt_factory
-from schema import RESPONSE_SCHEMA
+from schema import ITEM_SCHEMA, IDENTIFY_RESPONSE_SCHEMA
+from cache import load_cache, save_cache
 
 
 def grab_window_image(title: str) -> str:
@@ -26,12 +28,9 @@ def grab_window_image(title: str) -> str:
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
-def analyze_image(title: str, target_lang: str, report_lang: str, api_key: str) -> Dict:
-    """Send screenshot to OpenAI and return parsed response."""
-    img_b64 = grab_window_image(title)
-    factory = get_prompt_factory(report_lang)
-    prompt = factory.create_prompt(target_lang)
-
+def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Dict:
+    """Ask OpenAI to identify vocabulary and grammar in the image."""
+    prompt = factory.create_identify_prompt(target_lang)
     openai.api_key = api_key
     response = openai.ChatCompletion.create(
         model="gpt-4-vision-preview",
@@ -44,9 +43,80 @@ def analyze_image(title: str, target_lang: str, report_lang: str, api_key: str) 
                 ],
             }
         ],
-        functions=[{"name": "deliver_report", "parameters": RESPONSE_SCHEMA}],
+        functions=[{"name": "identify_terms", "parameters": IDENTIFY_RESPONSE_SCHEMA}],
+        function_call={"name": "identify_terms"},
+        max_tokens=400,
+    )
+    args = response.choices[0].message.get("function_call", {}).get("arguments", "{}")
+    return json.loads(args)
+
+
+def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: str, api_key: str) -> Dict:
+    """Ask OpenAI for detailed explanations of given terms."""
+    prompt = factory.create_prompt(target_lang)
+    message = prompt
+    if vocab:
+        message += "\nVocabulary:\n" + "\n".join(vocab)
+    if grammar:
+        message += "\nGrammar:\n" + "\n".join(grammar)
+
+    openai.api_key = api_key
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": message}],
+        functions=[{"name": "deliver_report", "parameters": ITEM_SCHEMA}],
         function_call={"name": "deliver_report"},
         max_tokens=500,
     )
     args = response.choices[0].message.get("function_call", {}).get("arguments", "{}")
     return json.loads(args)
+
+
+def analyze_image(title: str, target_lang: str, report_lang: str, api_key: str) -> Dict:
+    """Process screenshot through OpenAI with caching."""
+    img_b64 = grab_window_image(title)
+    factory = get_prompt_factory(report_lang)
+
+    terms = _identify_terms(img_b64, factory, target_lang, api_key)
+
+    cache = load_cache()
+    vocab_cache = cache.get("vocabulary", {})
+    grammar_cache = cache.get("grammar", {})
+
+    new_vocab: List[str] = []
+    new_grammar: List[str] = []
+    for level_info in terms.values():
+        if not level_info:
+            continue
+        for w in level_info.get("vocabulary", []):
+            if w not in vocab_cache:
+                new_vocab.append(w)
+        for g in level_info.get("grammar", []):
+            if g not in grammar_cache:
+                new_grammar.append(g)
+
+    details = {"vocabulary": [], "grammar": []}
+    if new_vocab or new_grammar:
+        details = _fetch_details(new_vocab, new_grammar, factory, target_lang, api_key)
+        for item in details.get("vocabulary", []):
+            word = item.get("word")
+            if word:
+                vocab_cache[word] = item
+        for item in details.get("grammar", []):
+            point = item.get("grammar_point")
+            if point:
+                grammar_cache[point] = item
+        cache["vocabulary"] = vocab_cache
+        cache["grammar"] = grammar_cache
+        save_cache(cache)
+
+    result = {}
+    for level, info in terms.items():
+        if not info:
+            result[level] = {"vocabulary": [], "grammar": []}
+            continue
+        vocab_list = [vocab_cache.get(w) for w in info.get("vocabulary", []) if w in vocab_cache]
+        grammar_list = [grammar_cache.get(g) for g in info.get("grammar", []) if g in grammar_cache]
+        result[level] = {"vocabulary": vocab_list, "grammar": grammar_list}
+
+    return result

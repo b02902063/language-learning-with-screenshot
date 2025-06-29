@@ -1,3 +1,13 @@
+NAME_LIST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "vocabulary": {"type": "array", "items": {"type": "string"}},
+        "grammar": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["vocabulary", "grammar"],
+}
+
+
 ITEM_SCHEMA = {
     "type": "object",
     "properties": {
@@ -169,6 +179,20 @@ RESPONSE_SCHEMA = {
         "N3": ITEM_SCHEMA,
         "N4": ITEM_SCHEMA,
         "N5": ITEM_SCHEMA,
+    },
+    "required": ["N1", "N2", "N3", "N4", "N5"],
+    "additionalProperties": False,
+}
+
+
+IDENTIFY_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "N1": {"anyOf": [NAME_LIST_SCHEMA, {"type": "null"}]},
+        "N2": {"anyOf": [NAME_LIST_SCHEMA, {"type": "null"}]},
+        "N3": {"anyOf": [NAME_LIST_SCHEMA, {"type": "null"}]},
+        "N4": {"anyOf": [NAME_LIST_SCHEMA, {"type": "null"}]},
+        "N5": {"anyOf": [NAME_LIST_SCHEMA, {"type": "null"}]},
     },
     "required": ["N1", "N2", "N3", "N4", "N5"],
     "additionalProperties": False,
