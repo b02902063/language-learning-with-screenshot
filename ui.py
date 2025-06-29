@@ -2,7 +2,8 @@ from typing import List
 from PyQt5 import QtWidgets
 import pygetwindow as gw
 
-from config import t, UI_STRINGS, current_ui_language, save_settings
+import config
+from config import t, UI_STRINGS, save_settings
 from openai_client import analyze_image
 from mock_openai_client import mock_identify_terms, mock_fetch_details
 
@@ -65,8 +66,7 @@ class MainWindow(QtWidgets.QWidget):
         self.api_key = settings.get("api_key", "")
         self.report_language = settings.get("report_language", "en")
         self.test_mode = settings.get("test_mode", False)
-        global current_ui_language
-        current_ui_language = settings.get("ui_language", "en")
+        config.current_ui_language = settings.get("ui_language", "en")
         self.identify_func = mock_identify_terms if self.test_mode else None
         self.fetch_func = mock_fetch_details if self.test_mode else None
         self.setWindowTitle(t("Screenshot Language Helper"))
@@ -85,7 +85,7 @@ class MainWindow(QtWidgets.QWidget):
         self.level_combo = QtWidgets.QComboBox()
         self.label_level = QtWidgets.QLabel(t("Your Level"))
         form.addRow(self.label_level, self.level_combo)
-        self.update_levels(self.language_combo.currentText())
+        self.update_levels(self.language_combo.currentText(), update_display=False)
         self.level_combo.currentIndexChanged.connect(self.update_display)
 
         self.window_combo = QtWidgets.QComboBox()
@@ -123,11 +123,12 @@ class MainWindow(QtWidgets.QWidget):
         except Exception:
             return {"English": ["A1", "A2", "B1", "B2", "C1", "C2"]}
 
-    def update_levels(self, language: str) -> None:
+    def update_levels(self, language: str, update_display: bool=True) -> None:
         levels = self.languages.get(language, [])
         self.level_combo.clear()
         self.level_combo.addItems(levels)
-        self.update_display()
+        if update_display:
+            self.update_display()
 
     def capture_and_analyze(self):
         if not self.api_key and not self.test_mode:
@@ -153,8 +154,7 @@ class MainWindow(QtWidgets.QWidget):
             self.api_key = self.settings.get("api_key", "")
             self.report_language = self.settings.get("report_language", "en")
             self.test_mode = self.settings.get("test_mode", False)
-            global current_ui_language
-            current_ui_language = self.settings.get("ui_language", "en")
+            config.current_ui_language = self.settings.get("ui_language", "en")
             self.identify_func = mock_identify_terms if self.test_mode else None
             self.fetch_func = mock_fetch_details if self.test_mode else None
             self.refresh_ui_texts()
