@@ -12,6 +12,8 @@ from schema import get_schema
 from cache import load_cache, save_cache
 
 
+openai_client = None
+
 def grab_window_image(title: str) -> str:
     """Capture the selected window and return base64 string."""
     rect = None
@@ -33,11 +35,14 @@ def grab_window_image(title: str) -> str:
 
 def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Dict:
     """Ask OpenAI to identify vocabulary and grammar in the image."""
+    global openai_client
+    if openai_client is None:
+        openai_client = openai.OpenAI(api_key=api_key)
     _, identify_schema = get_schema(target_lang)
     prompt = factory.create_identify_prompt(target_lang)
     openai.api_key = api_key
-    response = openai.ChatCompletion.create(
-        model="gpt-4-vision-preview",
+    response = openai_client.chat.completions.create(
+        model="gpt-4.1-mini",
         messages=[
             {
                 "role": "user",
@@ -49,14 +54,21 @@ def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Di
         ],
         functions=[{"name": "identify_terms", "parameters": identify_schema}],
         function_call={"name": "identify_terms"},
-        max_tokens=400,
+        max_tokens=200,
     )
-    args = response.choices[0].message.get("function_call", {}).get("arguments", "{}")
-    return json.loads(args)
+    args = response.choices[0].message.function_call.arguments
+    try:
+        result = json.loads(args)
+    except:
+        result = {}
+    return result
 
 
 def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: str, api_key: str) -> Dict:
     """Ask OpenAI for detailed explanations of given terms."""
+    global openai_client
+    if openai_client is None:
+        openai_client = openai.OpenAI(api_key=api_key)
     item_schema, _ = get_schema(target_lang)
     prompt = factory.create_prompt(target_lang)
     message = prompt
@@ -66,15 +78,20 @@ def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: s
         message += "\nGrammar:\n" + "\n".join(grammar)
 
     openai.api_key = api_key
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+    response = openai_client.chat.completions.create(
+        model="gpt-4.1-mini",
         messages=[{"role": "user", "content": message}],
         functions=[{"name": "deliver_report", "parameters": item_schema}],
         function_call={"name": "deliver_report"},
-        max_tokens=500,
+        max_tokens=3000,
     )
-    args = response.choices[0].message.get("function_call", {}).get("arguments", "{}")
-    return json.loads(args)
+    args = response.choices[0].message.function_call.arguments
+
+    try:
+        result = json.loads(args)
+    except:
+        result = {}
+    return result
 
 
 def analyze_image(
