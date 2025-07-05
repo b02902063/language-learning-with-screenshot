@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 from PyQt5 import QtWidgets
 
 class WordEntry:
@@ -9,91 +9,111 @@ class WordEntry:
         self.is_grammar = is_grammar
         self.description = data.get('definition', '')
 
+def _dict_to_markdown(data: Dict[str, Any], level: int = 2) -> str:
+    """Convert a nested dictionary into markdown headers.
 
-def _vocab_to_markdown(item: dict) -> str:
-    lines = [f"# {item.get('word', '')} ({item.get('reading', '')})", "", item.get('definition', '')]
-    pos = item.get('pos', {})
-    label = pos.get('label')
-    if label:
-        subtype = pos.get('subtype')
-        label_line = f"**{label}**"
-        if subtype:
-            label_line += f" ({subtype})"
-        lines.append(label_line)
-    conj = item.get('conjugation')
-    if conj:
-        lines.append('## Conjugation')
-        for f in conj.get('forms', []):
-            lines.append(f"- {f}")
-    examples = item.get('examples', [])
-    if examples:
-        lines.append('## Examples')
-        for ex in examples:
-            tl = ex.get('target_language', '')
-            ul = ex.get('user_language', '')
-            lines.append(f"- {tl} — {ul}")
-    return '\n'.join(lines)
+    The top level starts at ``level`` and each nested level increases the
+    header depth. Lists of dictionaries are rendered as tables when possible.
+    """
 
-
-def _grammar_to_markdown(item: dict) -> str:
-    lines = [f"# {item.get('grammar_point', '')}", '', item.get('definition', '')]
-    structure = item.get('structure', [])
-    if structure:
-        lines.append('## Structure')
-        for s in structure:
-            lines.append(f"- {s}")
-    usage = item.get('usage_note')
-    if usage:
-        lines.append(f"**Usage:** {usage}")
-    examples = item.get('examples', [])
-    if examples:
-        lines.append('## Examples')
-        for ex in examples:
-            tl = ex.get('target_language', '')
-            ul = ex.get('user_language', '')
-            lines.append(f"- {tl} — {ul}")
+    lines: List[str] = []
+    for key, value in data.items():
+        header = '#' * level + f" {key}"
+        if isinstance(value, dict):
+            lines.append(header)
+            lines.append(_dict_to_markdown(value, level + 1))
+        elif isinstance(value, list):
+            lines.append(header)
+            if value and all(isinstance(v, dict) for v in value):
+                cols = sorted({k for item in value for k in item.keys()})
+                lines.append('|' + '|'.join(cols) + '|')
+                lines.append('|' + '|'.join(['---'] * len(cols)) + '|')
+                for item in value:
+                    row = [str(item.get(c, '')) for c in cols]
+                    lines.append('|' + '|'.join(row) + '|')
+            else:
+                for v in value:
+                    if isinstance(v, dict):
+                        lines.append(_dict_to_markdown(v, level + 1))
+                    else:
+                        lines.append(f"- {v}")
+        else:
+            lines.append(header)
+            lines.append(str(value))
     return '\n'.join(lines)
 
 
 def item_to_markdown(entry: WordEntry) -> str:
-    return _grammar_to_markdown(entry.data) if entry.is_grammar else _vocab_to_markdown(entry.data)
+    """Return a markdown representation of ``entry`` starting at level 2."""
+
+    data = dict(entry.data)
+    if entry.is_grammar:
+        title = data.pop('grammar_point', '')
+    else:
+        title = f"{data.pop('word', '')} ({data.pop('reading', '')})"
+    lines = [f"## {title}"]
+    if data:
+        lines.append(_dict_to_markdown(data, level=3))
+    return '\n'.join(lines)
 
 
 class DisplayArea(QtWidgets.QWidget):
+    """Widget showing vocabulary/grammar lists with a preview pane."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._entries: List[WordEntry] = []
-        self.stacked = QtWidgets.QStackedLayout(self)
+        self._vocab_entries: List[WordEntry] = []
+        self._grammar_entries: List[WordEntry] = []
 
-        self.list_widget = QtWidgets.QListWidget()
-        self.stacked.addWidget(self.list_widget)
+        layout = QtWidgets.QHBoxLayout(self)
 
-        detail_container = QtWidgets.QWidget()
-        dlayout = QtWidgets.QVBoxLayout(detail_container)
-        self.back_button = QtWidgets.QPushButton('Back')
         self.text_view = QtWidgets.QTextEdit()
         self.text_view.setReadOnly(True)
-        dlayout.addWidget(self.back_button)
-        dlayout.addWidget(self.text_view)
-        self.stacked.addWidget(detail_container)
+        layout.addWidget(self.text_view, 3)
 
-        self.list_widget.itemClicked.connect(self.show_detail)
-        self.back_button.clicked.connect(self.show_list)
+        list_container = QtWidgets.QWidget()
+        list_layout = QtWidgets.QVBoxLayout(list_container)
+
+        vocab_box = QtWidgets.QGroupBox('Vocabulary')
+        vocab_layout = QtWidgets.QVBoxLayout(vocab_box)
+        self.vocab_list = QtWidgets.QListWidget()
+        vocab_layout.addWidget(self.vocab_list)
+
+        grammar_box = QtWidgets.QGroupBox('Grammar')
+        grammar_layout = QtWidgets.QVBoxLayout(grammar_box)
+        self.grammar_list = QtWidgets.QListWidget()
+        grammar_layout.addWidget(self.grammar_list)
+
+        list_layout.addWidget(vocab_box)
+        list_layout.addWidget(grammar_box)
+
+        layout.addWidget(list_container, 1)
+
+        self.vocab_list.itemClicked.connect(lambda item: self.show_detail(item, False))
+        self.grammar_list.itemClicked.connect(lambda item: self.show_detail(item, True))
 
     def set_entries(self, entries: List[WordEntry], level: int) -> None:
-        self._entries = [e for e in entries if e.difficulty <= level]
-        self.show_list()
+        self._vocab_entries = [e for e in entries if not e.is_grammar and e.difficulty <= level]
+        self._grammar_entries = [e for e in entries if e.is_grammar and e.difficulty <= level]
+        self.update_lists()
+        self.text_view.clear()
 
-    def show_list(self) -> None:
-        self.list_widget.clear()
-        for e in self._entries:
-            self.list_widget.addItem(e.word)
-        self.stacked.setCurrentIndex(0)
+    def update_lists(self) -> None:
+        self.vocab_list.clear()
+        for e in self._vocab_entries:
+            self.vocab_list.addItem(e.word)
 
-    def show_detail(self, item: QtWidgets.QListWidgetItem) -> None:
-        index = self.list_widget.row(item)
-        entry = self._entries[index]
+        self.grammar_list.clear()
+        for e in self._grammar_entries:
+            self.grammar_list.addItem(e.word)
+
+    def show_detail(self, item: QtWidgets.QListWidgetItem, is_grammar: bool) -> None:
+        if is_grammar:
+            index = self.grammar_list.row(item)
+            entry = self._grammar_entries[index]
+        else:
+            index = self.vocab_list.row(item)
+            entry = self._vocab_entries[index]
         md = item_to_markdown(entry)
         self.text_view.setMarkdown(md)
-        self.stacked.setCurrentIndex(1)
 
