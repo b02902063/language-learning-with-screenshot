@@ -139,14 +139,71 @@ def vocab_to_markdown(v: Dict[str, Any]) -> str:
 
 
 def grammar_to_markdown(g: Dict[str, Any]) -> str:
-    """Return markdown for a grammar item using the original format."""
+    """Return markdown for a grammar item following the specified format."""
 
-    data = dict(g)
-    title = data.pop('grammar_point', '')
-    lines = [f"## {title}"]
-    if data:
-        lines.append(_dict_to_markdown(data, level=3))
-    return '\n'.join(lines)
+    title = g.get("grammar_point")
+    if not title:
+        return ""
+
+    lines: List[str] = [f"# {title}"]
+    lines.append("\n---\n")
+
+    # Definition section
+    definition = g.get("definition")
+    usage_note = g.get("usage_note")
+    tags = g.get("tags") or []
+    if definition or usage_note or tags:
+        lines.append("## \u5b9a\u7fa9")
+        if definition:
+            lines.append(str(definition))
+        if usage_note:
+            lines.append(str(usage_note))
+        if tags:
+            lines.append(", ".join(tags))
+        lines.append("\n---\n")
+
+    # Equivalent expressions section
+    equivalents = g.get("equivalent_expressions", [])
+    rows = []
+    for eq in equivalents:
+        if _has_none(eq):
+            rows = []
+            break
+        rows.append(f"|{eq['expression']}|{eq['difference']}|")
+    if rows:
+        lines.append("## \u76f8\u4f3c\u6587\u6cd5")
+        lines.append("|\u6587\u6cd5|\u5dee\u7570|")
+        lines.append("|---|---|")
+        lines.extend(rows)
+        lines.append("\n---\n")
+
+    # Related vocabulary section
+    related = g.get("related_vocabulary", [])
+    rows = []
+    for r in related:
+        if _has_none(r):
+            rows = []
+            break
+        reading = r.get("reading", "")
+        relation = r.get("relation", "")
+        rows.append(f"|{r['word']}|{reading}|{r['definition']}|{relation}|")
+    if rows:
+        lines.append("## \u95dc\u806f\u55ae\u5b57")
+        lines.append("|\u55ae\u5b57|\u8b80\u97f3|\u5b9a\u7fa9|\u4ecb\u7d39|")
+        lines.append("|---|---|---|---|")
+        lines.extend(rows)
+        lines.append("\n---\n")
+
+    # Examples section
+    examples = g.get("examples", [])
+    if examples and not _has_none(examples):
+        lines.append("## \u4f8b\u53e5")
+        for i, ex in enumerate(examples, start=1):
+            lines.append(
+                f"{i}. <big>{ex['target_language']}</big>\n<br />\n<small>{ex['user_language']}</small>\n"
+            )
+
+    return "\n".join(lines)
 
 
 def item_to_markdown(entry: WordEntry) -> str:
