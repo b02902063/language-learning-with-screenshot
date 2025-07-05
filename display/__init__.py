@@ -1,13 +1,16 @@
 from typing import List, Dict, Any
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtGui
 
 class WordEntry:
-    def __init__(self, word: str, difficulty: int, data: dict, is_grammar: bool = False):
+    def __init__(self, word: str, difficulty: int, data: dict, pos: str|None = None, is_grammar: bool = False):
         self.word = word
         self.difficulty = difficulty
         self.data = data
         self.is_grammar = is_grammar
         self.description = data.get('definition', '')
+        self.pos = pos
+        if pos is None:
+            self.pos = "Unknown"
 
 def _dict_to_markdown(data: Dict[str, Any], level: int = 2) -> str:
     """Convert a nested dictionary into markdown headers.
@@ -57,10 +60,11 @@ def _has_none(value: Any) -> bool:
 def vocab_to_markdown(v: Dict[str, Any]) -> str:
     """Return markdown for a vocabulary item following the specified format."""
 
-    if _has_none(v):
+    if not v.get("word"):
         return ""
 
     lines: List[str] = [f"# {v['word']}({v['reading']})"]
+    lines.append("\n---\n")
 
     # Definition section
     pos = v.get('pos', {})
@@ -71,6 +75,7 @@ def vocab_to_markdown(v: Dict[str, Any]) -> str:
         pos_str = f"{pos['label']},{subtype}" if subtype else pos['label']
         lines.append(f"[{pos_str}]")
         lines.append(str(definition))
+        lines.append("\n---\n")
 
     # Conjugation section
     conj = v.get('conjugation')
@@ -87,6 +92,7 @@ def vocab_to_markdown(v: Dict[str, Any]) -> str:
             lines.append("|\u5f62\u5f0f|\u7528\u6cd5|")
             lines.append("|---|---|")
             lines.extend(rows)
+            lines.append("\n---\n")
 
     # Transitivity section
     trans = v.get('transitivity')
@@ -96,19 +102,17 @@ def vocab_to_markdown(v: Dict[str, Any]) -> str:
         if intra and tran and not _has_none(intra) and not _has_none(tran):
             lines.append("## \u81ea\u4ed6\u52d5\u8a5e\u5c0d")
             lines.append(
-                f"\u81ea\u52d5\u8a5e\uff1a{intra['word']}({intra['reading']})[{intra['type']}]"
+                f"### \u81ea\u52d5\u8a5e\uff1a\n{intra['word']}({intra['reading']})[{intra['type']}]\n"
             )
             lines.append(
-                f"\u4ed6\u52d5\u8a5e\uff1a{tran['word']}({tran['reading']})[{tran['type']}]"
+                f"### \u4ed6\u52d5\u8a5e\uff1a\n{tran['word']}({tran['reading']})[{tran['type']}]\n"
             )
-
+            lines.append("\n---\n")
+    
     # Related words section
     related = v.get('related', [])
     table_rows = []
     for r in related:
-        if _has_none(r):
-            table_rows = []
-            break
         subtype = r.get('subtype')
         pos_field = f"{r['pos']},{subtype}" if subtype else r['pos']
         difference = r.get('difference', '')
@@ -120,14 +124,15 @@ def vocab_to_markdown(v: Dict[str, Any]) -> str:
         lines.append("|\u55ae\u5b57|\u8b80\u97f3|\u8a5e\u6027|\u5b9a\u7fa9|\u5340\u5225|")
         lines.append("|---|---|---|---|---|")
         lines.extend(table_rows)
-
+        lines.append("\n---\n")
+    
     # Examples section
     examples = v.get('examples', [])
     if examples and not _has_none(examples):
         lines.append("## \u4f8b\u53e5")
         for i, ex in enumerate(examples, start=1):
             lines.append(
-                f"{i}. <big>{ex['target_language']}</big><br><small>{ex['user_language']}</small>"
+                f"{i}. <big>{ex['target_language']}</big>\n<br />\n<small>{ex['user_language']}</small>\n"
             )
 
     return '\n'.join(lines)
@@ -164,6 +169,7 @@ class DisplayArea(QtWidgets.QWidget):
 
         self.text_view = QtWidgets.QTextEdit()
         self.text_view.setReadOnly(True)
+        
         layout.addWidget(self.text_view, 3)
 
         list_container = QtWidgets.QWidget()
@@ -196,11 +202,11 @@ class DisplayArea(QtWidgets.QWidget):
     def update_lists(self) -> None:
         self.vocab_list.clear()
         for e in self._vocab_entries:
-            self.vocab_list.addItem(e.word)
+            self.vocab_list.addItem(f"{e.word}[{e.pos}], N{e.difficulty}")
 
         self.grammar_list.clear()
         for e in self._grammar_entries:
-            self.grammar_list.addItem(e.word)
+            self.grammar_list.addItem(f"{e.word}, N{e.difficulty}")
 
     def show_detail(self, item: QtWidgets.QListWidgetItem, is_grammar: bool) -> None:
         if is_grammar:
@@ -211,4 +217,13 @@ class DisplayArea(QtWidgets.QWidget):
             entry = self._vocab_entries[index]
         md = item_to_markdown(entry)
         self.text_view.setMarkdown(md)
+        
+        cursor = self.text_view.textCursor()
+        cursor.select(QtGui.QTextCursor.Document) 
+
+        block_format = QtGui.QTextBlockFormat()
+        block_format.setLineHeight(100, QtGui.QTextBlockFormat.ProportionalHeight) 
+
+        cursor.mergeBlockFormat(block_format)
+        self.text_view.setTextCursor(cursor)
 

@@ -67,7 +67,7 @@ class MainWindow(QtWidgets.QWidget):
         self.identify_func = mock_identify_terms if self.test_mode else None
         self.fetch_func = mock_fetch_details if self.test_mode else None
         self.setWindowTitle(t("Screenshot Language Helper"))
-        self.resize(600, 400)
+        self.resize(1500, 800)
 
         layout = QtWidgets.QHBoxLayout()
 
@@ -79,17 +79,20 @@ class MainWindow(QtWidgets.QWidget):
         self.language_combo = QtWidgets.QComboBox()
         self.languages = self.load_language_config()
         self.language_combo.addItems(self.languages.keys())
+        self.language_combo.setFixedSize(150, 25)
         self.language_combo.currentTextChanged.connect(self.update_levels)
         self.label_target_language = QtWidgets.QLabel(t("Target Language"))
         form.addRow(self.label_target_language, self.language_combo)
 
         self.level_combo = QtWidgets.QComboBox()
+        self.level_combo.setFixedSize(150, 25)
         self.label_level = QtWidgets.QLabel(t("Your Level"))
         form.addRow(self.label_level, self.level_combo)
         self.update_levels(self.language_combo.currentText(), update_display=False)
         self.level_combo.currentIndexChanged.connect(self.update_display)
 
         self.window_combo = QtWidgets.QComboBox()
+        self.window_combo.setFixedSize(150, 25)
         for w in gw.getAllWindows():
             title = w.title.strip()
             if title:
@@ -100,8 +103,9 @@ class MainWindow(QtWidgets.QWidget):
         right_layout.addLayout(form)
 
         self.capture_button = QtWidgets.QPushButton(t("Capture & Analyze"))
+        self.capture_button.setFixedSize(150, 25)
         self.capture_button.clicked.connect(self.capture_and_analyze)
-        right_layout.addWidget(self.capture_button)
+        right_layout.addWidget(self.capture_button, alignment=QtCore.Qt.AlignCenter)
 
         right_layout.addStretch(1)
 
@@ -177,10 +181,20 @@ class MainWindow(QtWidgets.QWidget):
                 difficulty = len(levels)
             for vocab in info.get("vocabulary", []):
                 word = vocab.get("word", "")
-                result.append(WordEntry(word, difficulty, vocab))
+                pos = vocab.get("pos")
+                subtype = pos['subtype']
+                label = pos['label']
+                pos_text = f"{label},{subtype}" if subtype is not None else label
+                result.append(WordEntry(word, difficulty, vocab, pos=pos_text))
             for gram in info.get("grammar", []):
                 word = gram.get("grammar_point", "")
                 result.append(WordEntry(word, difficulty, gram, is_grammar=True))
+        
+        result = sorted(
+            result,
+            key=lambda x: (x.is_grammar, x.pos, x.difficulty)
+        )
+
         return result
 
     def update_display(self):
