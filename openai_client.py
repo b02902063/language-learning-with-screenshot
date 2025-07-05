@@ -41,6 +41,7 @@ def _identify_terms(img_b64: str, factory, target_lang: str, api_key: str) -> Di
     _, identify_schema = get_schema(target_lang)
     prompt = factory.create_identify_prompt(target_lang)
     openai.api_key = api_key
+    
     response = openai_client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[
@@ -72,24 +73,33 @@ def _fetch_details(vocab: List[str], grammar: List[str], factory, target_lang: s
     item_schema, _ = get_schema(target_lang)
     prompt = factory.create_prompt(target_lang)
     message = prompt
-    if vocab:
-        message += "\nVocabulary:\n" + "\n".join(vocab)
-    if grammar:
-        message += "\nGrammar:\n" + "\n".join(grammar)
+    #if vocab:
+    #    message += "\nVocabulary:\n" + "\n".join(vocab)
+    #if grammar:
+    #    message += "\nGrammar:\n" + "\n".join(grammar)
+    user_content = json.dumps({
+        "vocabs": vocab,
+        "grammars": grammar
+    }, ensure_ascii=False)
 
     openai.api_key = api_key
+    
     response = openai_client.chat.completions.create(
         model="gpt-4.1-mini",
-        messages=[{"role": "user", "content": message}],
+        messages = [
+            {"role": "system", "content": message},
+            {"role": "user", "content": user_content}
+        ],
         functions=[{"name": "deliver_report", "parameters": item_schema}],
         function_call={"name": "deliver_report"},
-        max_tokens=3000,
+        max_tokens=10000,
     )
     args = response.choices[0].message.function_call.arguments
 
     try:
         result = json.loads(args)
-    except:
+    except Exception as e:
+        print(e)
         result = {}
     return result
 
@@ -126,16 +136,20 @@ def analyze_image(
         if not level_info:
             continue
         for w in level_info.get("vocabulary", []):
-            if w not in vocab_cache:
+            if w not in vocab_cache and w not in new_vocab:
                 new_vocab.append(w)
         for g in level_info.get("grammar", []):
-            if g not in grammar_cache:
+            if g not in grammar_cache and g not in new_grammar:
                 new_grammar.append(g)
 
     details = {"vocabulary": [], "grammar": []}
     fetch = fetch_func or _fetch_details
+    print(new_vocab)
+    print(new_grammar)
     if new_vocab or new_grammar:
         details = fetch(new_vocab, new_grammar, factory, target_lang, api_key)
+        if len(details) == 0:
+            print(f"Got empty details, #vocab: {len(new_vocab)}, #grammar: {len(new_grammar)}")
         for item in details.get("vocabulary", []):
             word = item.get("word")
             if word:

@@ -12,6 +12,8 @@ from config import t, UI_STRINGS, save_settings
 from openai_client import analyze_image
 import openai_client
 from mock_openai_client import mock_identify_terms, mock_fetch_details
+from screenshot import grab_window_image
+
 
 class SettingsDialog(QtWidgets.QDialog):
     def __init__(self, settings):
@@ -217,8 +219,8 @@ class MainWindow(QtWidgets.QWidget):
             for vocab in info.get("vocabulary", []):
                 word = vocab.get("word", "")
                 pos = vocab.get("pos")
-                subtype = pos['subtype']
-                label = pos['label']
+                subtype = pos.get('subtype')
+                label = pos.get('label')
                 pos_text = f"{label},{subtype}" if subtype is not None else label
                 result.append(WordEntry(word, difficulty, vocab, pos=pos_text))
             for gram in info.get("grammar", []):
@@ -238,7 +240,8 @@ class MainWindow(QtWidgets.QWidget):
 
     def preview_screenshot(self):
         title = self.window_combo.currentText()
-        img_b64 = openai_client.grab_window_image(title)
+        #img_b64 = openai_client.grab_window_image(title)
+        img_b64 = grab_window_image(title)
         img_data = base64.b64decode(img_b64)
         pil_img = Image.open(io.BytesIO(img_data))
         qimg = QtGui.QImage.fromData(img_data)

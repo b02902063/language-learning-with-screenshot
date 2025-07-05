@@ -27,7 +27,13 @@ class EnglishPromptFactory(PromptFactory):
 class ChinesePromptFactory(PromptFactory):
     def create_prompt(self, target_lang: str) -> str:
         return (
-            f"請根據提供的{target_lang}單字與文法，以繁體中文輸出詳盡說明，並遵守結構。"
+f"""
+你是{target_lang}學習資料的 JSON 產生器，請根據使用者給定的單字（vocabs）和文法（grammars）清單，
+依照下方 JSON Schema 格式，產生完整的 JSON 結果。
+
+請正確填寫 schema 中所有 required 欄位，非required欄位也盡可能填寫，並依照 description 說明合理填值。
+只回傳符合該 schema 的 JSON，不需要額外說明文字。
+"""
         )
 
     def create_identify_prompt(self, target_lang: str) -> str:

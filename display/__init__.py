@@ -59,7 +59,6 @@ def _has_none(value: Any) -> bool:
 
 def vocab_to_markdown(v: Dict[str, Any]) -> str:
     """Return markdown for a vocabulary item following the specified format."""
-
     if not v.get("word"):
         return ""
 
@@ -113,8 +112,9 @@ def vocab_to_markdown(v: Dict[str, Any]) -> str:
     related = v.get('related', [])
     table_rows = []
     for r in related:
-        subtype = r.get('subtype')
-        pos_field = f"{r['pos']},{subtype}" if subtype else r['pos']
+        subtype = r.get('subtype', "Unknown")
+        pos = r.get('pos', "Unknown")
+        pos_field = f"{pos},{subtype}"
         difference = r.get('difference', '')
         table_rows.append(
             f"|{r['word']}|{r['reading']}|{pos_field}|{r['definition']}|{difference}|"
