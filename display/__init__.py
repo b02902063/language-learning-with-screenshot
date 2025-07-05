@@ -43,18 +43,113 @@ def _dict_to_markdown(data: Dict[str, Any], level: int = 2) -> str:
     return '\n'.join(lines)
 
 
-def item_to_markdown(entry: WordEntry) -> str:
-    """Return a markdown representation of ``entry`` starting at level 2."""
+def _has_none(value: Any) -> bool:
+    """Recursively check if ``value`` or any nested value is ``None``."""
+    if value is None:
+        return True
+    if isinstance(value, dict):
+        return any(_has_none(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_none(v) for v in value)
+    return False
 
-    data = dict(entry.data)
-    if entry.is_grammar:
-        title = data.pop('grammar_point', '')
-    else:
-        title = f"{data.pop('word', '')} ({data.pop('reading', '')})"
+
+def vocab_to_markdown(v: Dict[str, Any]) -> str:
+    """Return markdown for a vocabulary item following the specified format."""
+
+    if _has_none(v):
+        return ""
+
+    lines: List[str] = [f"# {v['word']}({v['reading']})"]
+
+    # Definition section
+    pos = v.get('pos', {})
+    definition = v.get('definition')
+    if pos and definition:
+        lines.append("## \u5b9a\u7fa9")
+        subtype = pos.get('subtype', '')
+        pos_str = f"{pos['label']},{subtype}" if subtype else pos['label']
+        lines.append(f"[{pos_str}]")
+        lines.append(str(definition))
+
+    # Conjugation section
+    conj = v.get('conjugation')
+    if conj and not _has_none(conj):
+        examples = conj.get('examples', [])
+        rows = []
+        for ex in examples:
+            if _has_none(ex):
+                rows = []
+                break
+            rows.append(f"|{ex['form']}|{ex['usage']}|")
+        if rows:
+            lines.append("## \u6d3b\u7528")
+            lines.append("|\u5f62\u5f0f|\u7528\u6cd5|")
+            lines.append("|---|---|")
+            lines.extend(rows)
+
+    # Transitivity section
+    trans = v.get('transitivity')
+    if trans and not _has_none(trans):
+        intra = trans.get('intransitive')
+        tran = trans.get('transitive')
+        if intra and tran and not _has_none(intra) and not _has_none(tran):
+            lines.append("## \u81ea\u4ed6\u52d5\u8a5e\u5c0d")
+            lines.append(
+                f"\u81ea\u52d5\u8a5e\uff1a{intra['word']}({intra['reading']})[{intra['type']}]"
+            )
+            lines.append(
+                f"\u4ed6\u52d5\u8a5e\uff1a{tran['word']}({tran['reading']})[{tran['type']}]"
+            )
+
+    # Related words section
+    related = v.get('related', [])
+    table_rows = []
+    for r in related:
+        if _has_none(r):
+            table_rows = []
+            break
+        subtype = r.get('subtype')
+        pos_field = f"{r['pos']},{subtype}" if subtype else r['pos']
+        difference = r.get('difference', '')
+        table_rows.append(
+            f"|{r['word']}|{r['reading']}|{pos_field}|{r['definition']}|{difference}|"
+        )
+    if table_rows:
+        lines.append("## \u76f8\u4f3c\u8a5e")
+        lines.append("|\u55ae\u5b57|\u8b80\u97f3|\u8a5e\u6027|\u5b9a\u7fa9|\u5340\u5225|")
+        lines.append("|---|---|---|---|---|")
+        lines.extend(table_rows)
+
+    # Examples section
+    examples = v.get('examples', [])
+    if examples and not _has_none(examples):
+        lines.append("## \u4f8b\u53e5")
+        for i, ex in enumerate(examples, start=1):
+            lines.append(
+                f"{i}. <big>{ex['target_language']}</big><br><small>{ex['user_language']}</small>"
+            )
+
+    return '\n'.join(lines)
+
+
+def grammar_to_markdown(g: Dict[str, Any]) -> str:
+    """Return markdown for a grammar item using the original format."""
+
+    data = dict(g)
+    title = data.pop('grammar_point', '')
     lines = [f"## {title}"]
     if data:
         lines.append(_dict_to_markdown(data, level=3))
     return '\n'.join(lines)
+
+
+def item_to_markdown(entry: WordEntry) -> str:
+    """Return a markdown representation of ``entry`` starting at level 1."""
+
+    if entry.is_grammar:
+        return grammar_to_markdown(entry.data)
+    return vocab_to_markdown(entry.data)
 
 
 class DisplayArea(QtWidgets.QWidget):
