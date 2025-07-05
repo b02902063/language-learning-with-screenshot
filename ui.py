@@ -1,5 +1,8 @@
 from typing import List
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
+import base64
+import io
+from PIL import Image, ImageChops
 import pygetwindow as gw
 
 from display import DisplayArea, WordEntry
@@ -7,6 +10,7 @@ from display import DisplayArea, WordEntry
 import config
 from config import t, UI_STRINGS, save_settings
 from openai_client import analyze_image
+import openai_client
 from mock_openai_client import mock_identify_terms, mock_fetch_details
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -107,6 +111,16 @@ class MainWindow(QtWidgets.QWidget):
         self.capture_button.clicked.connect(self.capture_and_analyze)
         right_layout.addWidget(self.capture_button, alignment=QtCore.Qt.AlignCenter)
 
+        self.preview_button = QtWidgets.QPushButton(t("Preview the screenshot"))
+        self.preview_button.setFixedSize(150, 25)
+        self.preview_button.clicked.connect(self.preview_screenshot)
+        right_layout.addWidget(self.preview_button, alignment=QtCore.Qt.AlignCenter)
+
+        self.view_last_button = QtWidgets.QPushButton(t("View the latest screenshot"))
+        self.view_last_button.setFixedSize(150, 25)
+        self.view_last_button.clicked.connect(self.show_last_screenshot)
+        right_layout.addWidget(self.view_last_button, alignment=QtCore.Qt.AlignCenter)
+
         right_layout.addStretch(1)
 
         self.settings_button = QtWidgets.QPushButton(t("Settings"))
@@ -116,6 +130,8 @@ class MainWindow(QtWidgets.QWidget):
         layout.addLayout(right_layout, 1)
         self.setLayout(layout)
         self.words: List[WordEntry] = []
+        self.last_image = None
+        self.last_img_b64 = None
 
     def load_language_config(self) -> dict:
         import json
@@ -134,19 +150,36 @@ class MainWindow(QtWidgets.QWidget):
         if update_display:
             self.update_display()
 
-    def capture_and_analyze(self):
+    def capture_and_analyze(self, img_b64: str | None = None, pil_image: Image.Image | None = None):
         if not self.api_key and not self.test_mode:
             QtWidgets.QMessageBox.warning(self, t("Error"), t("API key not provided"))
             return
         title = self.window_combo.currentText()
+        if img_b64 is None:
+            img_b64 = openai_client.grab_window_image(title)
+        if pil_image is None and img_b64 is not None:
+            pil_image = Image.open(io.BytesIO(base64.b64decode(img_b64)))
+        if self.last_image is not None and pil_image is not None:
+            diff = self._image_diff_ratio(self.last_image, pil_image)
+            if diff <= 0.03:
+                if QtWidgets.QMessageBox.question(
+                    self,
+                    t("Warning"),
+                    t("Screenshot looks similar to previous one. Proceed?"),
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                ) != QtWidgets.QMessageBox.Yes:
+                    return
         data = analyze_image(
             title,
             self.language_combo.currentText(),
             self.report_language,
             self.api_key,
+            img_b64=img_b64,
             identify_func=self.identify_func,
             fetch_func=self.fetch_func,
         )
+        self.last_image = pil_image
+        self.last_img_b64 = img_b64
         self.words = self.parse_words(data)
         self.update_display()
 
@@ -169,6 +202,8 @@ class MainWindow(QtWidgets.QWidget):
         self.label_level.setText(t("Your Level"))
         self.label_window.setText(t("Window"))
         self.capture_button.setText(t("Capture & Analyze"))
+        self.preview_button.setText(t("Preview the screenshot"))
+        self.view_last_button.setText(t("View the latest screenshot"))
         self.settings_button.setText(t("Settings"))
 
     def parse_words(self, data: dict) -> List[WordEntry]:
@@ -200,4 +235,54 @@ class MainWindow(QtWidgets.QWidget):
     def update_display(self):
         level = self.level_combo.currentIndex() + 1
         self.display_area.set_entries(self.words, level)
+
+    def preview_screenshot(self):
+        title = self.window_combo.currentText()
+        img_b64 = openai_client.grab_window_image(title)
+        img_data = base64.b64decode(img_b64)
+        pil_img = Image.open(io.BytesIO(img_data))
+        qimg = QtGui.QImage.fromData(img_data)
+        pix = QtGui.QPixmap.fromImage(qimg)
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(t("Preview the screenshot"))
+        vbox = QtWidgets.QVBoxLayout(dialog)
+        label = QtWidgets.QLabel()
+        label.setPixmap(pix.scaled(800, 600, QtCore.Qt.KeepAspectRatio))
+        vbox.addWidget(label)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        vbox.addWidget(buttons)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            self.capture_and_analyze(img_b64, pil_img)
+
+    def show_last_screenshot(self):
+        if not hasattr(self, "last_img_b64") or not self.last_img_b64:
+            return
+        img_data = base64.b64decode(self.last_img_b64)
+        qimg = QtGui.QImage.fromData(img_data)
+        pix = QtGui.QPixmap.fromImage(qimg)
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(t("View the latest screenshot"))
+        vbox = QtWidgets.QVBoxLayout(dialog)
+        label = QtWidgets.QLabel()
+        label.setPixmap(pix.scaled(800, 600, QtCore.Qt.KeepAspectRatio))
+        vbox.addWidget(label)
+        close_btn = QtWidgets.QPushButton(t("Close"))
+        close_btn.clicked.connect(dialog.accept)
+        vbox.addWidget(close_btn, alignment=QtCore.Qt.AlignCenter)
+        dialog.exec_()
+
+    @staticmethod
+    def _image_diff_ratio(img1: Image.Image, img2: Image.Image) -> float:
+        img1 = img1.convert("RGB")
+        img2 = img2.convert("RGB")
+        if img1.size != img2.size:
+            img2 = img2.resize(img1.size)
+        diff = ImageChops.difference(img1, img2)
+        hist = diff.histogram()
+        sq = sum(i * hist[i] for i in range(len(hist)))
+        max_diff = 255 * img1.size[0] * img1.size[1] * 3
+        return sq / max_diff
 
