@@ -99,6 +99,8 @@ def analyze_image(
     target_lang: str,
     report_lang: str,
     api_key: str,
+    *,
+    img_b64: Optional[str] = None,
     identify_func: Optional[Callable[[str, Any, str, str], Dict]] = None,
     fetch_func: Optional[Callable[[List[str], List[str], Any, str, str], Dict]] = None,
 ) -> Dict:
@@ -107,7 +109,8 @@ def analyze_image(
     ``identify_func`` and ``fetch_func`` allow callers to inject mock
     implementations of :func:`_identify_terms` and :func:`_fetch_details`.
     """
-    img_b64 = grab_window_image(title)
+    if img_b64 is None:
+        img_b64 = grab_window_image(title)
     factory = get_prompt_factory(report_lang)
 
     identify = identify_func or _identify_terms

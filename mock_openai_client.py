@@ -172,13 +172,21 @@ def mock_fetch_details(vocab: List[str], grammar: List[str], factory, target_lan
     return MOCK_ITEM_RESPONSE
 
 
-def analyze_image(title: str, target_lang: str, report_lang: str, api_key: str) -> Dict:
+def analyze_image(
+    title: str,
+    target_lang: str,
+    report_lang: str,
+    api_key: str,
+    *,
+    img_b64: str | None = None,
+) -> Dict:
     """Run openai_client.analyze_image using mock functions."""
     return openai_client.analyze_image(
         title,
         target_lang,
         report_lang,
         api_key,
+        img_b64=img_b64,
         identify_func=mock_identify_terms,
         fetch_func=mock_fetch_details,
     )
