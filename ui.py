@@ -72,7 +72,7 @@ class MainWindow(QtWidgets.QWidget):
         layout = QtWidgets.QHBoxLayout()
 
         self.display_area = DisplayArea()
-        layout.addWidget(self.display_area, 2)
+        layout.addWidget(self.display_area, 11)
 
         right_layout = QtWidgets.QVBoxLayout()
         form = QtWidgets.QFormLayout()
