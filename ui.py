@@ -110,8 +110,13 @@ class MainWindow(QtWidgets.QWidget):
 
         self.capture_button = QtWidgets.QPushButton(t("Capture & Analyze"))
         self.capture_button.setFixedSize(150, 25)
-        self.capture_button.clicked.connect(self.capture_and_analyze)
+        self.capture_button.clicked.connect(self.capture_and_identify)
         right_layout.addWidget(self.capture_button, alignment=QtCore.Qt.AlignCenter)
+
+        self.analyze_all_button = QtWidgets.QPushButton(t("Analyze All"))
+        self.analyze_all_button.setFixedSize(150, 25)
+        self.analyze_all_button.clicked.connect(self.capture_and_analyze_all)
+        right_layout.addWidget(self.analyze_all_button, alignment=QtCore.Qt.AlignCenter)
 
         self.preview_button = QtWidgets.QPushButton(t("Preview the screenshot"))
         self.preview_button.setFixedSize(150, 25)
@@ -122,6 +127,11 @@ class MainWindow(QtWidgets.QWidget):
         self.view_last_button.setFixedSize(150, 25)
         self.view_last_button.clicked.connect(self.show_last_screenshot)
         right_layout.addWidget(self.view_last_button, alignment=QtCore.Qt.AlignCenter)
+
+        self.fetch_details_button = QtWidgets.QPushButton(t("Fetch Details"))
+        self.fetch_details_button.setFixedSize(160, 40)
+        self.fetch_details_button.clicked.connect(self.fetch_selected_details)
+        right_layout.addWidget(self.fetch_details_button, alignment=QtCore.Qt.AlignCenter)
 
         right_layout.addStretch(1)
 
@@ -152,7 +162,7 @@ class MainWindow(QtWidgets.QWidget):
         if update_display:
             self.update_display()
 
-    def capture_and_analyze(self, img_b64: str | None = None, pil_image: Image.Image | None = None):
+    def capture_and_analyze_all(self, img_b64: str | None = None, pil_image: Image.Image | None = None):
         if not self.api_key and not self.test_mode:
             QtWidgets.QMessageBox.warning(self, t("Error"), t("API key not provided"))
             return
@@ -185,6 +195,38 @@ class MainWindow(QtWidgets.QWidget):
         self.words = self.parse_words(data)
         self.update_display()
 
+    def capture_and_identify(self, img_b64: str | None = None, pil_image: Image.Image | None = None):
+        if not self.api_key and not self.test_mode:
+            QtWidgets.QMessageBox.warning(self, t("Error"), t("API key not provided"))
+            return
+        title = self.window_combo.currentText()
+        if img_b64 is None:
+            img_b64 = openai_client.grab_window_image(title)
+        if pil_image is None and img_b64 is not None:
+            pil_image = Image.open(io.BytesIO(base64.b64decode(img_b64)))
+        if self.last_image is not None and pil_image is not None:
+            diff = self._image_diff_ratio(self.last_image, pil_image)
+            if diff <= 0.03:
+                if QtWidgets.QMessageBox.question(
+                    self,
+                    t("Warning"),
+                    t("Screenshot looks similar to previous one. Proceed?"),
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                ) != QtWidgets.QMessageBox.Yes:
+                    return
+        data = openai_client.identify_image(
+            title,
+            self.language_combo.currentText(),
+            self.report_language,
+            self.api_key,
+            img_b64=img_b64,
+            identify_func=self.identify_func,
+        )
+        self.last_image = pil_image
+        self.last_img_b64 = img_b64
+        self.words = self.parse_words(data)
+        self.update_display()
+
     def open_settings(self):
         dialog = SettingsDialog(self.settings)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
@@ -204,8 +246,10 @@ class MainWindow(QtWidgets.QWidget):
         self.label_level.setText(t("Your Level"))
         self.label_window.setText(t("Window"))
         self.capture_button.setText(t("Capture & Analyze"))
+        self.analyze_all_button.setText(t("Analyze All"))
         self.preview_button.setText(t("Preview the screenshot"))
         self.view_last_button.setText(t("View the latest screenshot"))
+        self.fetch_details_button.setText(t("Fetch Details"))
         self.settings_button.setText(t("Settings"))
 
     def parse_words(self, data: dict) -> List[WordEntry]:
@@ -217,15 +261,26 @@ class MainWindow(QtWidgets.QWidget):
             except ValueError:
                 difficulty = len(levels)
             for vocab in info.get("vocabulary", []):
-                word = vocab.get("word", "")
-                pos = vocab.get("pos")
-                subtype = pos.get('subtype')
-                label = pos.get('label')
-                pos_text = f"{label},{subtype}" if subtype is not None else label
-                result.append(WordEntry(word, difficulty, vocab, pos=pos_text))
+                if isinstance(vocab, str):
+                    word = vocab
+                    pos_text = "Unknown"
+                    data = {}
+                else:
+                    word = vocab.get("word", "")
+                    pos = vocab.get("pos", {})
+                    subtype = pos.get('subtype')
+                    label = pos.get('label', 'Unknown')
+                    pos_text = f"{label},{subtype}" if subtype is not None else label
+                    data = vocab
+                result.append(WordEntry(word, difficulty, data, pos=pos_text))
             for gram in info.get("grammar", []):
-                word = gram.get("grammar_point", "")
-                result.append(WordEntry(word, difficulty, gram, is_grammar=True))
+                if isinstance(gram, str):
+                    word = gram
+                    data = {}
+                else:
+                    word = gram.get("grammar_point", "")
+                    data = gram
+                result.append(WordEntry(word, difficulty, data, is_grammar=True))
         
         result = sorted(
             result,
@@ -254,11 +309,15 @@ class MainWindow(QtWidgets.QWidget):
         label.setPixmap(pix.scaled(800, 600, QtCore.Qt.KeepAspectRatio))
         vbox.addWidget(label)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        all_btn = buttons.addButton(t("All"), QtWidgets.QDialogButtonBox.ActionRole)
         vbox.addWidget(buttons)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
+        all_btn.clicked.connect(lambda: dialog.done(2))
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
-            self.capture_and_analyze(img_b64, pil_img)
+            self.capture_and_identify(img_b64, pil_img)
+        elif dialog.result() == 2:
+            self.capture_and_analyze_all(img_b64, pil_img)
 
     def show_last_screenshot(self):
         if not hasattr(self, "last_img_b64") or not self.last_img_b64:
@@ -276,6 +335,56 @@ class MainWindow(QtWidgets.QWidget):
         close_btn.clicked.connect(dialog.accept)
         vbox.addWidget(close_btn, alignment=QtCore.Qt.AlignCenter)
         dialog.exec_()
+
+    def fetch_selected_details(self):
+        vocab_indexes = self.display_area.vocab_list.selectedIndexes()
+        grammar_indexes = self.display_area.grammar_list.selectedIndexes()
+
+        vocab_terms = []
+        vocab_entries = []
+        for idx in vocab_indexes:
+            entry = self.display_area._vocab_entries[idx.row()]
+            if not entry.data:
+                vocab_terms.append(entry.word)
+                vocab_entries.append(entry)
+
+        grammar_terms = []
+        grammar_entries = []
+        for idx in grammar_indexes:
+            entry = self.display_area._grammar_entries[idx.row()]
+            if not entry.data:
+                grammar_terms.append(entry.word)
+                grammar_entries.append(entry)
+
+        if not vocab_terms and not grammar_terms:
+            return
+
+        details = openai_client.fetch_details_only(
+            vocab_terms,
+            grammar_terms,
+            self.language_combo.currentText(),
+            self.report_language,
+            self.api_key,
+            fetch_func=self.fetch_func,
+        )
+
+        for item in details.get("vocabulary", []):
+            word = item.get("word")
+            for e in vocab_entries:
+                if e.word == word:
+                    e.data = item
+                    e.description = item.get("definition", "")
+                    pos = item.get("pos", {})
+                    subtype = pos.get("subtype")
+                    label = pos.get("label", "Unknown")
+                    e.pos = f"{label},{subtype}" if subtype is not None else label
+        for item in details.get("grammar", []):
+            point = item.get("grammar_point")
+            for e in grammar_entries:
+                if e.word == point:
+                    e.data = item
+
+        self.update_display()
 
     @staticmethod
     def _image_diff_ratio(img1: Image.Image, img2: Image.Image) -> float:

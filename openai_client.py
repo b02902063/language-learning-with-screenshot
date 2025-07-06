@@ -172,3 +172,59 @@ def analyze_image(
         result[level] = {"vocabulary": vocab_list, "grammar": grammar_list}
 
     return result
+
+
+def identify_image(
+    title: str,
+    target_lang: str,
+    report_lang: str,
+    api_key: str,
+    *,
+    img_b64: Optional[str] = None,
+    identify_func: Optional[Callable[[str, Any, str, str], Dict]] = None,
+) -> Dict:
+    """Capture screenshot and only identify terms without fetching details."""
+    if img_b64 is None:
+        img_b64 = grab_window_image(title)
+    factory = get_prompt_factory(report_lang)
+
+    identify = identify_func or _identify_terms
+    return identify(img_b64, factory, target_lang, api_key)
+
+
+def fetch_details_only(
+    vocab: List[str],
+    grammar: List[str],
+    target_lang: str,
+    report_lang: str,
+    api_key: str,
+    *,
+    fetch_func: Optional[Callable[[List[str], List[str], Any, str, str], Dict]] = None,
+) -> Dict:
+    """Fetch details for the given vocabulary and grammar and update the cache."""
+    if not vocab and not grammar:
+        return {"vocabulary": [], "grammar": []}
+
+    cache = load_cache()
+    vocab_cache = cache.get("vocabulary", {})
+    grammar_cache = cache.get("grammar", {})
+
+    factory = get_prompt_factory(report_lang)
+    fetch = fetch_func or _fetch_details
+    details = fetch(vocab, grammar, factory, target_lang, api_key)
+
+    for item in details.get("vocabulary", []):
+        word = item.get("word")
+        if word:
+            vocab_cache[word] = item
+
+    for item in details.get("grammar", []):
+        point = item.get("grammar_point")
+        if point:
+            grammar_cache[point] = item
+
+    cache["vocabulary"] = vocab_cache
+    cache["grammar"] = grammar_cache
+    save_cache(cache)
+
+    return details
