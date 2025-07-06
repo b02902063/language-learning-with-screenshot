@@ -235,11 +235,13 @@ class DisplayArea(QtWidgets.QWidget):
         vocab_box = QtWidgets.QGroupBox('Vocabulary')
         vocab_layout = QtWidgets.QVBoxLayout(vocab_box)
         self.vocab_list = QtWidgets.QListWidget()
+        self.vocab_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         vocab_layout.addWidget(self.vocab_list)
 
         grammar_box = QtWidgets.QGroupBox('Grammar')
         grammar_layout = QtWidgets.QVBoxLayout(grammar_box)
         self.grammar_list = QtWidgets.QListWidget()
+        self.grammar_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         grammar_layout.addWidget(self.grammar_list)
 
         list_layout.addWidget(vocab_box)
