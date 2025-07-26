@@ -17,6 +17,9 @@ See `requirements.txt` for the list of Python dependencies. Install them using:
 pip install -r requirements.txt
 ```
 
+The application relies on [konoha](https://github.com/himkt/konoha) for
+Japanese word segmentation when processing OCR results.
+
 ## Running
 
 ```bash
