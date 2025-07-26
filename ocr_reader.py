@@ -24,6 +24,13 @@ class OcrReader:
         text = pytesseract.image_to_string(img, lang=self.lang)
         return [line.strip() for line in text.splitlines() if line.strip()]
 
+    def read_b64(self, img_b64: str) -> List[str]:
+        """Return recognized text lines from a base64 image string."""
+        img_bytes = base64.b64decode(img_b64)
+        img = Image.open(io.BytesIO(img_bytes))
+        text = pytesseract.image_to_string(img, lang=self.lang)
+        return [line.strip() for line in text.splitlines() if line.strip()]
+
 
 class PeriodicOcrCollector:
     """Run OCR periodically in a background thread and collect results."""

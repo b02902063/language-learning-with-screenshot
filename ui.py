@@ -6,6 +6,8 @@ from PIL import Image, ImageChops
 import pygetwindow as gw
 
 from display import DisplayArea, WordEntry
+from ocr_reader import OcrReader
+from japanese_tokenizer import segment_japanese
 
 import config
 from config import t, UI_STRINGS, save_settings
@@ -141,7 +143,8 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addLayout(right_layout, 1)
         self.setLayout(layout)
-        self.words: List[WordEntry] = []
+        self.word_entries: List[WordEntry] = []
+        self.words: set[str] = set()
         self.last_image = None
         self.last_img_b64 = None
 
@@ -192,7 +195,8 @@ class MainWindow(QtWidgets.QWidget):
         )
         self.last_image = pil_image
         self.last_img_b64 = img_b64
-        self.words = self.parse_words(data)
+        self._process_ocr_words(img_b64)
+        self.word_entries = self.parse_words(data)
         self.update_display()
 
     def capture_and_identify(self, img_b64: str | None = None, pil_image: Image.Image | None = None):
@@ -224,7 +228,8 @@ class MainWindow(QtWidgets.QWidget):
         )
         self.last_image = pil_image
         self.last_img_b64 = img_b64
-        self.words = self.parse_words(data)
+        self._process_ocr_words(img_b64)
+        self.word_entries = self.parse_words(data)
         self.update_display()
 
     def open_settings(self):
@@ -289,9 +294,27 @@ class MainWindow(QtWidgets.QWidget):
 
         return result
 
+    def _process_ocr_words(self, img_b64: str) -> None:
+        reader = OcrReader(self.window_combo.currentText(), lang="jpn")
+        lines = reader.read_b64(img_b64)
+        for line in lines:
+            for w in segment_japanese(line):
+                self.words.add(w)
+
     def update_display(self):
         level = self.level_combo.currentIndex() + 1
-        self.display_area.set_entries(self.words, level)
+        # Merge OCR words with entries from the API
+        ocr_entries = []
+        levels = self.languages.get(self.language_combo.currentText(), [])
+        unknown_level = len(levels)
+        existing = {e.word for e in self.word_entries}
+        for w in sorted(self.words):
+            if w not in existing:
+                ocr_entries.append(
+                    WordEntry(w, unknown_level, {}, pos="Unknown")
+                )
+        all_entries = self.word_entries + ocr_entries
+        self.display_area.set_entries(all_entries, level)
 
     def preview_screenshot(self):
         title = self.window_combo.currentText()
